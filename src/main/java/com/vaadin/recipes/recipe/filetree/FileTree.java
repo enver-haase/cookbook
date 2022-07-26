@@ -55,7 +55,60 @@ public class FileTree extends Recipe {
             ioException.printStackTrace();
         }
     }
-    private static final File rootFile = new File(System.getProperty("java.io.tmpdir") + File.separator + "ROOT");
+    private static final FileWrapper rootFile = new FileWrapper(new File(System.getProperty("java.io.tmpdir") + File.separator + "ROOT"));
+
+    private static class FileWrapper implements Comparable<FileWrapper> {
+        private File wrappedFile;
+        public FileWrapper(File toBeWrapped){
+            this.wrappedFile = toBeWrapped;
+        }
+
+        public boolean isDirectory(){
+            return wrappedFile.isDirectory();
+        }
+
+        public String getName(){
+            return this.wrappedFile.getName();
+        }
+        public void setName(String newName){
+            String parent = wrappedFile.getParent();
+            File renameTo;
+            if (parent != null){
+                renameTo = new File(parent + File.separatorChar + newName);
+            }
+            else{
+                renameTo = new File(newName);
+            }
+
+            if (renameTo.exists()){
+                System.err.println("File already exists: Could not rename '"+wrappedFile.getAbsolutePath()+"' to '"+renameTo.getAbsolutePath()+"'.");
+                return;
+            }
+
+            if (wrappedFile.renameTo(renameTo)){
+                // iff true, then renaming succeeded
+                System.err.println("Successfully renamed '"+wrappedFile.getAbsolutePath()+"' to '"+renameTo.getAbsolutePath()+"'.");
+                wrappedFile = renameTo;
+            }
+            else{
+                System.err.println("Could not rename '"+wrappedFile.getAbsolutePath()+"' to '"+renameTo.getAbsolutePath()+"'.");
+            }
+        }
+
+        public FileWrapper[] listFiles() {
+            File[] listing = wrappedFile.listFiles();
+            FileWrapper[] retVal = new FileWrapper[listing.length];
+            for (int i=0; i<listing.length; i++){
+                retVal[i] = new FileWrapper(listing[i]);
+            }
+            return retVal;
+        }
+
+        @Override
+        public int compareTo(FileWrapper o) {
+            return this.wrappedFile.compareTo(o.wrappedFile);
+        }
+    }
 
     private static class Tree<T> extends TreeGrid<T> {
 
@@ -66,10 +119,10 @@ public class FileTree extends Recipe {
     }
 
     public FileTree() {
-        Tree<File> filesTree = new Tree<>(File::getName);
+        Tree<FileWrapper> filesTree = new Tree<>(FileWrapper::getName);
 
-        Binder<File> binder = new Binder<>();
-        Editor<File> editor = filesTree.getEditor();
+        Binder<FileWrapper> binder = new Binder<>();
+        Editor<FileWrapper> editor = filesTree.getEditor();
         editor.setBinder(binder);
 
         filesTree.setItems(Collections.singleton(rootFile), this::getFiles);
@@ -85,7 +138,7 @@ public class FileTree extends Recipe {
             .ifPresent(
                 fileColumn -> {
                     fileColumn.setComparator(Comparator.naturalOrder());
-                    GridSortOrder<File> sortOrder = new GridSortOrder<>(fileColumn, SortDirection.ASCENDING);
+                    GridSortOrder<FileWrapper> sortOrder = new GridSortOrder<>(fileColumn, SortDirection.ASCENDING);
                     filesTree.sort(Collections.singletonList(sortOrder));
 
                     fileColumn.setEditorComponent(editorTextField);
@@ -108,19 +161,21 @@ public class FileTree extends Recipe {
             editor.editItem(e.getItem());
             Component editorComponent = e.getColumn().getEditorComponent();
             if (editorComponent instanceof Focusable) {
-                ((Focusable) editorComponent).focus();
+                ((Focusable<?>) editorComponent).focus();
             }
             editorTextField.setValue(e.getItem().getName());
         });
         editorTextField.getElement().addEventListener("keydown", event -> editor.cancel()).setFilter("event.key === 'Escape' || event.key === 'Esc'");
 
+        editorTextField.addBlurListener(e -> editor.getItem().setName(editorTextField.getValue()));
+
         this.add(filesTree);
         setSizeFull();
     }
 
-    private List<File> getFiles(File parent) {
+    private List<FileWrapper> getFiles(FileWrapper parent) {
         if (parent.isDirectory()) {
-            File[] list = parent.listFiles();
+            FileWrapper[] list = parent.listFiles();
             if (list != null) {
                 return Arrays.asList(list);
             }
