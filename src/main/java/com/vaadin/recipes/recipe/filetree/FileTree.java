@@ -1,7 +1,13 @@
 package com.vaadin.recipes.recipe.filetree;
 
+import com.vaadin.flow.component.Component;
+import com.vaadin.flow.component.Focusable;
+import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.grid.GridSortOrder;
+import com.vaadin.flow.component.grid.editor.Editor;
+import com.vaadin.flow.component.textfield.TextField;
 import com.vaadin.flow.component.treegrid.TreeGrid;
+import com.vaadin.flow.data.binder.Binder;
 import com.vaadin.flow.data.provider.SortDirection;
 import com.vaadin.flow.function.ValueProvider;
 import com.vaadin.flow.router.Route;
@@ -61,7 +67,17 @@ public class FileTree extends Recipe {
 
     public FileTree() {
         Tree<File> filesTree = new Tree<>(File::getName);
+
+        Binder<File> binder = new Binder<>();
+        Editor<File> editor = filesTree.getEditor();
+        editor.setBinder(binder);
+
         filesTree.setItems(Collections.singleton(rootFile), this::getFiles);
+        filesTree.setWidthFull();
+        filesTree.setHeight("300px");
+        filesTree.setSelectionMode(Grid.SelectionMode.NONE);
+        TextField editorTextField = new TextField();
+        editorTextField.setWidthFull();
         filesTree
             .getColumns()
             .stream()
@@ -71,22 +87,32 @@ public class FileTree extends Recipe {
                     fileColumn.setComparator(Comparator.naturalOrder());
                     GridSortOrder<File> sortOrder = new GridSortOrder<>(fileColumn, SortDirection.ASCENDING);
                     filesTree.sort(Collections.singletonList(sortOrder));
-                    filesTree.setWidthFull();
-                    filesTree.setHeight("300px");
-                    filesTree
-                        .asSingleSelect()
-                        .addValueChangeListener(
-                            event -> {
-                                File file = event.getValue();
-                                if (file != null && file.isFile()) { // deselecting: file == null
-                                    // do something
-                                } else {
-                                    // don't do anything
-                                }
-                            }
-                        );
+
+                    fileColumn.setEditorComponent(editorTextField);
+
+//                    filesTree
+//                        .asSingleSelect()
+//                        .addValueChangeListener(
+//                            event -> {
+//                                File file = event.getValue();
+//                                if (file != null && file.isFile()) { // deselecting: file == null
+//                                    // do something
+//                                } else {
+//                                    // don't do anything
+//                                }
+//                            }
+//                        );
                 }
             );
+        filesTree.addItemDoubleClickListener(e -> {
+            editor.editItem(e.getItem());
+            Component editorComponent = e.getColumn().getEditorComponent();
+            if (editorComponent instanceof Focusable) {
+                ((Focusable) editorComponent).focus();
+            }
+            editorTextField.setValue(e.getItem().getName());
+        });
+        editorTextField.getElement().addEventListener("keydown", event -> editor.cancel()).setFilter("event.key === 'Escape' || event.key === 'Esc'");
 
         this.add(filesTree);
         setSizeFull();
